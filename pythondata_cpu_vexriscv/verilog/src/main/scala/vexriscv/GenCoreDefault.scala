@@ -7,6 +7,7 @@ import spinal.lib.sim.Phase
 import vexriscv.ip.{DataCacheConfig, InstructionCacheConfig}
 import vexriscv.plugin.CsrAccess.WRITE_ONLY
 import vexriscv.plugin._
+import spinal.lib.cpu.riscv.debug._
 
 import scala.collection.mutable.ArrayBuffer
 
@@ -21,6 +22,7 @@ object SpinalConfig extends spinal.core.SpinalConfig(
 }
 
 case class ArgConfig(
+  jtag : Boolean = false,
   debug : Boolean = false,
   hardwareBreakpointCount : Int = 0,
   iCacheSize : Int = 4096,
@@ -62,6 +64,7 @@ object GenCoreDefault{
     val parser = new scopt.OptionParser[ArgConfig]("VexRiscvGen") {
       //  ex :-d    or   --debug
       opt[Unit]('d', "debug")    action { (_, c) => c.copy(debug = true)   } text("Enable debug")
+      opt[Unit]('j', "jtag")    action { (_, c) => c.copy(jtag = true)   } text("Enable jtag")      
       opt[Int]("hardwareBreakpointCount")     action { (v, c) => c.copy(hardwareBreakpointCount = v) } text("Set number of available hardware breakpoints, defaults to 0")
       // ex : -iCacheSize=XXX
       opt[Int]("iCacheSize")     action { (v, c) => c.copy(iCacheSize = v) } text("Set instruction cache size, 0 mean no cache")
@@ -91,7 +94,7 @@ object GenCoreDefault{
     val argConfig = parser.parse(args, ArgConfig()).get
     val linux = argConfig.csrPluginConfig.startsWith("linux")
 
-    SpinalConfig.copy(netlistFileName = argConfig.outputFile + ".v").generateVerilog {
+    SpinalConfig.copy(netlistFileName = argConfig.outputFile + ".v", privateNamespace=true).generateVerilog {
       // Generate CPU plugin list
       val plugins = ArrayBuffer[Plugin[VexRiscv]]()
 
@@ -226,7 +229,7 @@ object GenCoreDefault{
             case "linux" => CsrPluginConfig.linuxFull(mtVecInit = argConfig.machineTrapVector).copy(ebreakGen = false)
             case "linux-minimal" => CsrPluginConfig.linuxMinimal(mtVecInit = argConfig.machineTrapVector).copy(ebreakGen = false)
             case "secure" => CsrPluginConfig.secure(argConfig.machineTrapVector)
-          }).copy(xtvecModeGen = argConfig.xtvecModeGen)
+          }).copy(xtvecModeGen = argConfig.xtvecModeGen, withPrivilegedDebug = true)
         ),
         new YamlPlugin(argConfig.outputFile.concat(".yaml"))
       )
@@ -258,12 +261,31 @@ object GenCoreDefault{
         )
       )
 
+      var debugCd = if(argConfig.debug || argConfig.jtag) {
+      	  ClockDomain.current.clone(reset = Bool().setName("debugReset"))
+      } else {
+        null
+      }
+      
       // Add in the Debug plugin, if requested
-      if(argConfig.debug) {
+      if(argConfig.debug || argConfig.jtag) {
         plugins += new DebugPlugin(
-          debugClockDomain = ClockDomain.current.clone(reset = Bool().setName("debugReset")),
+          debugClockDomain = debugCd,
           hardwareBreakpointCount = argConfig.hardwareBreakpointCount 
         )
+      }
+
+      if(argConfig.jtag) {
+      			 plugins += new EmbeddedRiscvJtag(
+  p = DebugTransportModuleParameter(
+    addressWidth = 7,
+    version      = 1,
+    idle         = 7
+  ),
+            debugCd = debugCd,
+  withTunneling = false,
+  withTap = true
+)
       }
 
       // CFU plugin/port

@@ -15,6 +15,9 @@ VexRiscv_Debug.v: $(SRC)
 VexRiscv_Lite.v: $(SRC)
 	sbt compile "runMain vexriscv.GenCoreDefault --iCacheSize 2048 --dCacheSize 0 --mulDiv true --singleCycleShift false --singleCycleMulDiv false  --outputFile VexRiscv_Lite"
 
+VexRiscv_LiteJTag.v: $(SRC)
+	sbt compile "runMain vexriscv.GenCoreDefault --iCacheSize 2048 --dCacheSize 0 --mulDiv true --jtag --singleCycleShift false --singleCycleMulDiv false  --outputFile VexRiscv_LiteJTag --hardwareBreakpointCount 8"
+
 VexRiscv_LiteDebug.v: $(SRC)
 	sbt compile "runMain vexriscv.GenCoreDefault -d --iCacheSize 2048 --dCacheSize 0 --mulDiv true --singleCycleShift false --singleCycleMulDiv false --outputFile VexRiscv_LiteDebug"
 
