@@ -268,7 +268,7 @@ object GenCoreDefault{
       }
       
       // Add in the Debug plugin, if requested
-      if(argConfig.debug || argConfig.jtag) {
+      if(argConfig.debug) {
         plugins += new DebugPlugin(
           debugClockDomain = debugCd,
           hardwareBreakpointCount = argConfig.hardwareBreakpointCount 
